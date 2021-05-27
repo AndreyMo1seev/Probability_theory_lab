@@ -6,8 +6,8 @@ import numpy as np
 p2 = 0.3
 LEN = 10000
 p = 1 - p2
-n = 100
-k = 60
+n = 1000
+k = 3
 m = k - 2
 p1 = 1 - p
 values = []
@@ -18,13 +18,6 @@ def sample_mean(d1):
     summ = sum([d1[key] for key in d1])
     sm = (1/summ)*sum([(d1[key]+ 1) * (key+1) for key in d1])
     return sm
-
-
-
-def sample_mean2(tableList): # выборочное среднее
-    v = sum([b for a, b, c in tableList])
-    s_m = (1 / v) * sum([a * b for a, b, c in tableList])
-    return s_m
 
 
 def choice_dispertion(d1): # выборочная дисперсия
@@ -71,8 +64,12 @@ def distribution_function(x, d1):
         return val
 
 
-def th_func(x):
+def th_func(x):  # Теоретическая функция распределения
     return 1 - (1-p2)**x
+
+
+def geom_probability(x):  # Подсчет геометрической вероятности для q_j
+    return p2*(1 - p2)**(x - 1)
 
 
 def draw_plot(d1):
@@ -102,23 +99,40 @@ def max_deviation(d1):
     return round(maxd, 4)
 
 
-def n_j(n,splt):
-    if n == 0:
+def density(x, r):
+    if x <= 0:
         return 0
+    else:
+        return 2 ** (-r / 2) * (1 / math.gamma(r / 2)) * x ** (r / 2 - 1) * math.exp(-x / 2)
+
+
+def integral(a, b, r):
+    n = 1000
+    t = (b - a) / n
     res = 0
-    for i in range(math.floor(splt[n - 1]), math.ceil(splt[n]) + 1):
-        if i >= splt[n - 1] and i < splt[n]:
-            res += 1
+    for i in range(n):
+        res += (density(a + t * i, r) + density(a + t * (i + 1), r)) * t / 2
     return res
 
 
-def R0(splt, intervals, sample_len):
-    r = 0
-    print(n_j(1, splt))
-    print(n_j(2, splt))
-    for s in range(1, sample_len):
-        r += ((n_j(s, splt) - n*intervals[s])**2)/(n*intervals[s])
-    return r
+def Function(R_0, r):
+    return 1 - integral(0, R_0, r)
+
+
+def nj(n, splitting, d2):
+    result = 0
+    for i in range(splitting[n], splitting[n + 1]):
+        if i in d2:
+            result += d2[i]
+    return result
+
+
+def R0(splitting, d2, q):
+    r0 = 0
+    for i in range(k):
+        if q[i] != 0:
+            r0 += ((nj(i, splitting, d2) - n * q[i])**2)/(n * q[i])
+    return r0
 
 
 for i in range(LEN):
@@ -180,33 +194,33 @@ print('Maxd = ', max_deviation(d1))
 
 # Lab3
 d2 = {key + 1: d1[key] for key in d1}
-sample = sorted([key*d2[key] for key in d2])
-left_b = max(sample)
-splitting = np.linspace(1, left_b, num=m+1, endpoint=True)
-q = [0]*left_b
-intervals = [0]*k
-for i in range(1, left_b + 1):
-    q[i-1] = (p2 * (1 - p2) ** i)/(1 - p2)
-print(n_j(2, splitting))
-s = 0
-# tmp = list()
-for i in range(2, m + 2):
-    for l in range(math.ceil(splitting[i - 2]), math.floor(splitting[i - 1]) + 1):
-        intervals[i - 1] += q[l-1]
-        # tmp.append(q[l - 1])
-tmp = [str(round(x, 6)) for x in splitting]
-r = R0(splitting, intervals, len(sample))
-split2 = ['-inf'] + tmp + ['inf']
-table_lab3 = PrettyTable()
-table_lab3.header = False
-table_lab3.add_row([f'({split2[i - 1]},{split2[i]})'for i in range(1, len(split2))])
-table_lab3.add_row([x for x in intervals])
+left_b = max(d2) # Максимальное значение выборки
+splitting = [0]*(k+1)  # Разбиение
+splitting[0] = 1
+print('Введите интервалы разбиения')
+for z in range(k - 1):
+    print(f'z{z + 1} = ')
+    splitting[z + 1] = int(input())
+splitting[k] = 10000  # Берем большую правую границу, чтобы точно не дойти до нее
+q = [0]*k  # Вероятности для каждого интервала разбиение
+index = 0
+for b in range(1, len(splitting)):
 
-print(sum(intervals))
-print(sum(q))
-print(table_lab3)
-print(100)
-
-
-
-
+    for i in range(left_b):
+        if i < splitting[b]:
+            if i >= splitting[b - 1]:
+                q[index] += geom_probability(i)
+        else:
+            index += 1
+            break
+q[index] = 1 - sum(q[:k - 1])
+print('q = ', q)
+r0 = R0(splitting, d2, q)
+f = Function(r0, k - 1)
+print('r0 = ', r0)
+print('f = ', f)
+alpha = 0.5  # Для уровня значимости 0.5 количество 'Принимаем' и 'Отвергаем' должно быть примерно поровну
+if f > alpha:
+    print('Принимаем')
+else:
+    print('Отвергаем')
